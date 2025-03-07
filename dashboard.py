@@ -3,11 +3,12 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-# Baca file CSV dengan path lengkap
-df_day = pd.read_csv("data/day.csv")
-df_hour = pd.read_csv("data/hour.csv")
+# Load Data
+df_day = pd.read_csv("day.csv")
+df_hour = pd.read_csv("hour.csv")
 
-# Pastikan 'dteday' diubah menjadi tipe datetime
+
+# Konversi kolom tanggal
 df_day['dteday'] = pd.to_datetime(df_day['dteday'])
 df_hour['dteday'] = pd.to_datetime(df_hour['dteday'])
 
@@ -15,50 +16,46 @@ df_hour['dteday'] = pd.to_datetime(df_hour['dteday'])
 st.sidebar.title("Dashboard Peminjaman Sepeda")
 data_option = st.sidebar.selectbox("Pilih Dataset:", ["Data Harian", "Data Per Jam"])
 
-# Menampilkan dataset yang dipilih
-st.title("📊 Analisis Peminjaman Sepeda 🚴‍♂️")
-if data_option == "Data Harian":
-    st.write("### 5 Data Pertama dari Dataset Harian")
-    st.write(df_day.head())
-    df = df_day
-else:
-    st.write("### 5 Data Pertama dari Dataset Per Jam")
-    st.write(df_hour.head())
-    df = df_hour
+# Pilih dataset
+df = df_day if data_option == "Data Harian" else df_hour
 
-# Menambahkan filter dan analisis lebih lanjut
-st.sidebar.write("### Filter Data")
-start_date = pd.to_datetime(st.sidebar.date_input("Pilih Tanggal Awal", pd.to_datetime(df['dteday'].min())))
-end_date = pd.to_datetime(st.sidebar.date_input("Pilih Tanggal Akhir", pd.to_datetime(df['dteday'].max())))
-
-# Filter data berdasarkan tanggal
+# Filter Tanggal
+start_date = pd.to_datetime(st.sidebar.date_input("Tanggal Awal", df['dteday'].min()))
+end_date = pd.to_datetime(st.sidebar.date_input("Tanggal Akhir", df['dteday'].max()))
 df_filtered = df[(df['dteday'] >= start_date) & (df['dteday'] <= end_date)]
 
-if df_filtered.empty:
-    st.write("Tidak ada data untuk periode ini.")
-else:
-    # Visualisasi Tren Peminjaman Sepeda
-    st.write(f"## Tren Peminjaman Sepeda dari {start_date} sampai {end_date}")
-    fig, ax = plt.subplots(figsize=(12, 6))
-    sns.lineplot(x=df_filtered['dteday'], y=df_filtered['cnt'], ax=ax, color='green')
-    ax.set_xlabel("Tanggal")
-    ax.set_ylabel("Jumlah Peminjaman Sepeda")
-    ax.set_title(f"Tren Peminjaman Sepeda {start_date} - {end_date}")
-    ax.grid(True)
-    plt.xticks(rotation=45)
-    st.pyplot(fig, use_container_width=True)
+# Metrik Utama
+total_peminjaman = df_filtered['cnt'].sum()
+rata_rata_peminjaman = df_filtered['cnt'].mean()
+pertumbuhan = ((df_filtered['cnt'].iloc[-1] - df_filtered['cnt'].iloc[0]) / df_filtered['cnt'].iloc[0]) * 100 if len(df_filtered) > 1 else 0
 
-    # Menambahkan analisis distribusi
-    st.write("## Analisis Distribusi Peminjaman Sepeda")
-    fig2, ax2 = plt.subplots(figsize=(12, 6))
-    sns.histplot(df_filtered['cnt'], kde=True, color='blue', ax=ax2)
-    ax2.set_xlabel("Jumlah Peminjaman Sepeda")
-    ax2.set_ylabel("Frekuensi")
-    ax2.set_title("Distribusi Peminjaman Sepeda")
-    st.pyplot(fig2, use_container_width=True)
+st.title("📊 Dashboard Peminjaman Sepeda 🚴‍♂️")
+col1, col2, col3 = st.columns(3)
+col1.metric("Total Peminjaman", f"{total_peminjaman:,.0f}")
+col2.metric("Rata-rata / Hari", f"{rata_rata_peminjaman:,.0f}")
+col3.metric("Pertumbuhan", f"{pertumbuhan:.2f}%")
 
-# Penutup
-st.write("""
-    **Dashboard ini dibuat dengan Streamlit untuk eksplorasi dataset peminjaman sepeda.**
-    Dengan visualisasi interaktif dan analisis yang lebih mendalam, Anda bisa menggali lebih banyak informasi tentang tren penggunaan sepeda di berbagai periode.
-""")
+# Visualisasi Tren Peminjaman
+st.write("## Tren Peminjaman Sepeda")
+fig, ax = plt.subplots(figsize=(12, 6))
+sns.lineplot(x=df_filtered['dteday'], y=df_filtered['cnt'], ax=ax, color='green')
+ax.set_title("Tren Peminjaman Sepeda")
+plt.xticks(rotation=45)
+st.pyplot(fig)
+
+# Distribusi Peminjaman
+st.write("## Distribusi Peminjaman Sepeda")
+fig2, ax2 = plt.subplots(figsize=(12, 6))
+sns.histplot(df_filtered['cnt'], kde=True, color='blue', ax=ax2)
+st.pyplot(fig2)
+
+# Perbandingan Weekday vs Weekend
+df_filtered['weekday'] = df_filtered['dteday'].dt.dayofweek
+df_filtered['is_weekend'] = df_filtered['weekday'].apply(lambda x: 'Weekend' if x >= 5 else 'Weekday')
+
+st.write("## Perbandingan Peminjaman Weekday vs Weekend")
+fig3, ax3 = plt.subplots(figsize=(10, 5))
+sns.boxplot(x="is_weekend", y="cnt", data=df_filtered, ax=ax3, palette=["blue", "orange"])
+st.pyplot(fig3)
+
+st.write("**Dashboard ini dirancang untuk memberikan wawasan lebih dalam terhadap pola peminjaman sepeda.** 🚴")
