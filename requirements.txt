@@ -1,0 +1,11 @@
+# Library untuk manipulasi data
+pandas==1.5.3  # Versi terbaru atau yang sesuai dengan kebutuhan
+
+# Library untuk operasi numerik
+numpy==1.24.2  # Versi terbaru atau yang sesuai dengan kebutuhan
+
+# Library untuk visualisasi dasar
+matplotlib==3.7.1  # Versi terbaru atau yang sesuai dengan kebutuhan
+
+# Library untuk visualisasi yang lebih keren
+seaborn==0.12.2  # Versi terbaru atau yang sesuai dengan kebutuhan
