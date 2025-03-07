@@ -1,4 +1,8 @@
-pandas==1.5.3
-numpy==1.24.2
-matplotlib==3.7.1
-seaborn==0.12.2
+streamlit==1.36.0
+pandas==2.2.2
+numpy==1.26.4
+matplotlib==3.8.2
+seaborn==0.13.2
+setuptools==70.0.0
+wheel==0.43.0
+Pillow==10.3.0  # Untuk dukungan gambar di Matplotlib
