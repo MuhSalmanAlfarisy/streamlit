@@ -11,95 +11,168 @@ df_hour = pd.read_csv("hour.csv")
 df_day["dteday"] = pd.to_datetime(df_day["dteday"])
 df_hour["dteday"] = pd.to_datetime(df_hour["dteday"])
 
-# Mapping nama musim
-season_mapping = {1: "Musim Semi", 2: "Musim Panas", 3: "Musim Gugur", 4: "Musim Dingin"}
-df_day["season_name"] = df_day["season"].map(season_mapping)
+# Mapping angka musim ke nama musim
+musim_map = {1: "Spring", 2: "Summer", 3: "Fall", 4: "Winter"}
+df_day["season"] = df_day["season"].map(musim_map)
+
+# Mapping kondisi cuaca
+weather_map = {1: "Cerah", 2: "Berkabut/Berawan", 3: "Hujan Ringan", 4: "Hujan Deras"}
+df_day["weathersit"] = df_day["weathersit"].map(weather_map)
 
 # Sidebar untuk interaktif
 st.sidebar.header("Filter Data")
-selected_season = st.sidebar.selectbox(
-    "Pilih Musim",
-    df_day["season"].unique(),
-    format_func=lambda x: season_mapping[x]
-)
-time_range = st.sidebar.slider("Pilih Rentang Jam", 0, 23, (6, 18))
 
-# Filter data
-df_day_filtered = df_day[df_day["season"] == selected_season]
-df_hour_filtered = df_hour[
-    (df_hour["season"] == selected_season) & 
-    (df_hour["hr"].between(time_range[0], time_range[1]))
+# FITUR INTERAKTIF: Filter data berdasarkan rentang suhu
+st.sidebar.subheader("Filter Rentang Suhu")
+temp_min = float(df_day["temp"].min())
+temp_max = float(df_day["temp"].max())
+selected_temp_range = st.sidebar.slider(
+    "Pilih Rentang Suhu (Normalisasi)",
+    min_value=temp_min,
+    max_value=temp_max,
+    value=(temp_min, temp_max),
+    step=0.05
+)
+
+# Filter seluruh dataset berdasarkan rentang suhu
+df_day_temp_filtered = df_day[
+    (df_day["temp"] >= selected_temp_range[0]) & 
+    (df_day["temp"] <= selected_temp_range[1])
 ]
+
+# Tambahkan filter musim sebagai pilihan kedua
+selected_season = st.sidebar.selectbox(
+    "Pilih Musim untuk Detail",
+    options=list(musim_map.values())
+)
+
+# Filter berdasarkan musim dan suhu untuk visualisasi kedua
+df_day_season_filtered = df_day_temp_filtered[df_day_temp_filtered["season"] == selected_season]
 
 # Menampilkan header
 st.header("📊 Dashboard Penyewaan Sepeda 🚲")
+st.markdown(f"**Filter Aktif:** Rentang Suhu {selected_temp_range[0]:.2f}-{selected_temp_range[1]:.2f} (Normalisasi)")
 
-# Visualisasi 1: Perbandingan Penyewaan Antar Musim (Semua Data)
-st.subheader("Perbandingan Penyewaan Antar Musim")
-season_counts = df_day.groupby("season_name")["cnt"].sum().reset_index()
+# Visualisasi 1: Distribusi Penyewaan Antar Musim (Data Terfilter berdasarkan Suhu)
+st.subheader(f"Distribusi Penyewaan Sepeda per Musim (Suhu: {selected_temp_range[0]:.2f}-{selected_temp_range[1]:.2f})")
 
-# Membuat warna berbeda untuk musim yang dipilih
-colors = ["#FF9999" if season == season_mapping[selected_season] else "#66B2FF" for season in season_counts["season_name"]]
+# Hitung rata-rata penyewaan per musim untuk data terfilter
+season_avg = df_day_temp_filtered.groupby("season")["cnt"].mean().reset_index()
 
-fig1, ax1 = plt.subplots()
-ax1.bar(season_counts["season_name"], season_counts["cnt"], color=colors)
-ax1.set_title("Total Penyewaan Sepeda per Musim")
+fig1, ax1 = plt.subplots(figsize=(8,5))
+sns.barplot(
+    x='season',
+    y='cnt',
+    data=season_avg,
+    palette="viridis",
+    errorbar=None,
+    ax=ax1
+)
+ax1.set_title(f"Distribusi Penyewaan Sepeda per Musim (Rentang Suhu: {selected_temp_range[0]:.2f}-{selected_temp_range[1]:.2f})")
 ax1.set_xlabel("Musim")
-ax1.set_ylabel("Total Penyewaan")
+ax1.set_ylabel("Rata-rata Penyewaan Harian")
+plt.xticks(rotation=45)
+
+# Tambahkan jumlah hari untuk setiap musim
+for i, musim in enumerate(season_avg["season"]):
+    count = len(df_day_temp_filtered[df_day_temp_filtered["season"] == musim])
+    ax1.text(i, 10, f"{count} hari", ha='center', bbox=dict(facecolor='white', alpha=0.7))
+
 st.pyplot(fig1)
 
-# Visualisasi 2: Tren Harian dalam Musim Terpilih
-st.subheader(f"Tren Harian di {season_mapping[selected_season]}")
-fig2, ax2 = plt.subplots(figsize=(10, 4))
-sns.lineplot(
-    data=df_day_filtered,
-    x="dteday", 
+# Visualisasi 2: Hubungan Suhu vs Penyewaan Sepeda (Data Terfilter)
+st.subheader(f"Hubungan Suhu vs Penyewaan Sepeda ({selected_season})")
+fig2, ax2 = plt.subplots(figsize=(8, 5))
+sns.scatterplot(
+    data=df_day_season_filtered,
+    x="temp", 
     y="cnt",
-    marker="o",
-    color="#2CA02C"
+    hue="weathersit",
+    palette="viridis",
+    alpha=0.7,
+    ax=ax2
 )
-ax2.set_title("Fluktuasi Harian Penyewaan Sepeda")
-ax2.set_xlabel("Tanggal")
+ax2.set_title(f"Hubungan Suhu dengan Jumlah Penyewaan di {selected_season}")
+ax2.set_xlabel("Suhu (Normalisasi)")
 ax2.set_ylabel("Jumlah Penyewaan")
-plt.xticks(rotation=45)
+plt.legend(title="Kondisi Cuaca")
 st.pyplot(fig2)
 
-# Visualisasi 3: Pola Jam Penyewaan (Filter Musim + Jam)
-st.subheader("Pola Penyewaan per Jam")
-hourly_counts = df_hour_filtered.groupby("hr")["cnt"].mean().reset_index()
+# Tampilkan metrik yang berubah berdasarkan filter
+jumlah_data_musim = len(df_day_season_filtered)
+if jumlah_data_musim > 0:
+    # Panel metrik interaktif
+    st.subheader("📈 Metrik Utama (Data Terfilter)")
+    
+    # Baris pertama metrik
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        # Jumlah hari terfilter
+        jumlah_data_total = len(df_day_temp_filtered)
+        st.metric("Total Hari (Semua Musim)", f"{jumlah_data_total}")
+        
+    with col2:
+        # Rata-rata harian seluruh dataset terfilter
+        avg_daily_all = df_day_temp_filtered["cnt"].mean()
+        st.metric("Rata-rata Harian (Semua Musim)", f"{avg_daily_all:.0f}")
+        
+    with col3:
+        # Suhu rata-rata
+        avg_temp = df_day_temp_filtered["temp"].mean()
+        # Konversi suhu dari normalisasi (0-1) ke Celcius untuk lebih mudah diinterpretasi
+        # Asumsikan suhu dalam dataset sudah dinormalisasi dari -8°C hingga 39°C
+        avg_temp_celcius = (avg_temp * 47) - 8
+        st.metric("Suhu Rata-rata", f"{avg_temp_celcius:.1f}°C")
+    
+    # Baris kedua metrik (khusus musim terpilih)
+    st.subheader(f"Detail untuk Musim {selected_season}")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        total_rentals = df_day_season_filtered["cnt"].sum()
+        st.metric(f"Total Penyewaan ({selected_season})", f"{total_rentals:,}")
 
-fig3, ax3 = plt.subplots()
-sns.barplot(
-    x="hr", 
-    y="cnt", 
-    data=hourly_counts,
-    palette="viridis",
-    ax=ax3
-)
-ax3.set_title("Rata-rata Penyewaan per Jam")
-ax3.set_xlabel("Jam dalam Sehari")
-ax3.set_ylabel("Rata-rata Penyewaan")
-st.pyplot(fig3)
+    with col2:
+        avg_daily = df_day_season_filtered["cnt"].mean()
+        st.metric(f"Rata-rata Harian ({selected_season})", f"{avg_daily:.0f}")
 
-# Panel metrik interaktif
-st.subheader("📈 Metrik Utama")
-col1, col2, col3 = st.columns(3)
-with col1:
-    total_season = df_day_filtered["cnt"].sum()
-    st.metric(f"Total {season_mapping[selected_season]}", f"{total_season:,}")
+    with col3:
+        # Persentase dari total penyewaan
+        percent_of_total = (total_rentals / df_day_temp_filtered["cnt"].sum() * 100).round(1)
+        st.metric("% dari Total Penyewaan", f"{percent_of_total}%")
 
-with col2:
-    avg_hourly = hourly_counts["cnt"].mean()
-    st.metric("Rata-rata per Jam", f"{avg_hourly:.0f}")
-
-with col3:
-    peak_hour = hourly_counts.loc[hourly_counts["cnt"].idxmax(), "hr"]
-    st.metric("Jam Puncak", f"{int(peak_hour)}:00")
-
-# Analisis tambahan
-st.subheader("🔍 Insight Analisis")
-st.write(f"""
-1. **Pola Musiman**: {season_mapping[selected_season]} menunjukkan total penyewaan sebesar **{total_season:,}** sepeda
-2. **Jam Sibuk**: Penyewaan tertinggi terjadi pada pukul **{int(peak_hour)}:00** dengan rata-rata **{avg_hourly:.0f}** sepeda
-3. **Tren Harian**: Fluktuasi harian menunjukkan pola {'yang stabil' if df_day_filtered['cnt'].std() < 500 else 'variasi signifikan'}
-""")
+    # Tampilkan ringkasan data terfilter
+    st.subheader("Ringkasan Data")
+    
+    # Buat tombol untuk mengubah tampilan
+    show_option = st.radio("Tampilkan data berdasarkan:", ["Ringkasan per Kondisi Cuaca", "Data Detail"])
+    
+    if show_option == "Ringkasan per Kondisi Cuaca":
+        ringkasan = df_day_season_filtered.groupby("weathersit")["cnt"].agg(["mean", "min", "max", "count"]).reset_index()
+        ringkasan.columns = ["Kondisi Cuaca", "Rata-rata Penyewaan", "Minimum", "Maksimum", "Jumlah Hari"]
+        st.write(ringkasan)
+    else:
+        st.write(df_day_season_filtered[["dteday", "temp", "weathersit", "cnt"]].sort_values(by="dteday"))
+    
+    # Analisis tambahan
+    st.subheader("🔍 Insight Analisis")
+    
+    # Hitung hari dengan penyewaan tertinggi dan terendah
+    if len(df_day_season_filtered) > 0:
+        max_day = df_day_season_filtered.loc[df_day_season_filtered["cnt"].idxmax()]
+        min_day = df_day_season_filtered.loc[df_day_season_filtered["cnt"].idxmin()]
+        
+        # Perbandingan antar musim
+        season_comparison = df_day_temp_filtered.groupby("season")["cnt"].mean().reset_index()
+        best_season = season_comparison.loc[season_comparison["cnt"].idxmax(), "season"]
+        worst_season = season_comparison.loc[season_comparison["cnt"].idxmin(), "season"]
+        
+        st.write(f"""
+        1. **Perbandingan Musim**: Dengan rentang suhu yang dipilih, **{best_season}** memiliki rata-rata penyewaan tertinggi dan **{worst_season}** terendah.
+        2. **{selected_season}**: Terdapat **{jumlah_data_musim}** hari dalam rentang suhu yang dipilih dengan rata-rata penyewaan **{avg_daily:.0f}** sepeda per hari.
+        3. **Hari Terbaik**: Penyewaan tertinggi terjadi pada **{max_day['dteday'].strftime('%d %B %Y')}** dengan **{max_day['cnt']}** sepeda (Cuaca: {max_day['weathersit']})
+        4. **Hari Terburuk**: Penyewaan terendah terjadi pada **{min_day['dteday'].strftime('%d %B %Y')}** dengan **{min_day['cnt']}** sepeda (Cuaca: {min_day['weathersit']})
+        """)
+    else:
+        st.warning(f"Tidak ada data untuk musim {selected_season} dalam rentang suhu yang dipilih.")
+else:
+    st.warning(f"Tidak ada data untuk musim {selected_season} dalam rentang suhu yang dipilih. Silakan sesuaikan rentang suhu.")
